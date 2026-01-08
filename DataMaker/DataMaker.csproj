@@ -4,6 +4,58 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+
+    <!-- NuGet Package Metadata -->
+    <PackageId>DataMaker</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Chris Tacke</Authors>
+    <Company>Your Company</Company>
+    <Product>DataMaker</Product>
+
+    <Title>DataMaker - Test Data Generation Library</Title>
+    <Description>A .NET library for quickly generating test data entities from existing data sources. Map your database tables to strongly-typed C# entities with support for foreign key lookups, sequential and random selection strategies, and flexible data providers.</Description>
+    <PackageTags>testing;test-data;data-generation;test;mocking;sql-server;entity;mapper;test-fixtures;unit-testing</PackageTags>
+
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+
+    <RepositoryUrl>https://github.com/ctacke/DataMaker</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/ctacke/DataMaker</PackageProjectUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageReleaseNotes>
+      v1.0.0 - Initial Release
+      - SQL Server data provider
+      - Strongly-typed property mappings with lambda expressions
+      - Foreign key lookup support (WithLookup)
+      - Sequential and Random selection strategies
+      - Custom mapping functions (WithTableMap)
+      - SQL injection protection
+      - Comprehensive XML documentation
+    </PackageReleaseNotes>
+
+    <!-- Optional: Include symbols for debugging -->
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+
+    <!-- Generate XML documentation file for IntelliSense -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <DocumentationFile>bin\$(Configuration)\$(TargetFramework)\$(AssemblyName).xml</DocumentationFile>
+
+    <!-- Optional: Automatically generate package on build -->
+    <!-- <GeneratePackageOnBuild>true</GeneratePackageOnBuild> -->
+  </PropertyGroup>
+
+  <!-- Include README in the package -->
+  <ItemGroup>
+    <None Include="..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\icon.png" Pack="true" PackagePath="\" />
+  </ItemGroup>
+  <PropertyGroup>
+    <PackageIcon>icon.png</PackageIcon>
   </PropertyGroup>
 
   <ItemGroup>
