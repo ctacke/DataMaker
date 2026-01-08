@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="DataMaker.Console/DataMaker.Console.csproj" />
+  <Project Path="DataMaker.Tests/DataMaker.Tests.csproj" />
+  <Project Path="DataMaker/DataMaker.csproj" />
+</Solution>
