@@ -30,13 +30,14 @@ namespace DataMaker
         }
 
         /// <summary>
-        /// Creates and registers a data map for the specified type.
+        /// Creates and registers a data map for the specified type with a primary table.
         /// </summary>
         /// <typeparam name="T">The type to create a data map for.</typeparam>
+        /// <param name="primaryTableName">The name of the primary table for this entity.</param>
         /// <returns>A DataMap instance for configuring property mappings.</returns>
-        public DataMap<T> AddDataMap<T>() where T : new()
+        public DataMap<T> AddDataMap<T>(string primaryTableName) where T : new()
         {
-            var map = new DataMap<T>();
+            var map = new DataMap<T>(primaryTableName);
             _dataMaps[typeof(T)] = map;
             return map;
         }
@@ -62,48 +63,66 @@ namespace DataMaker
             }
 
             var map = (DataMap<T>)dataMap;
+            var primaryTable = _dataProvider[map.PrimaryTableName];
+            var rowCount = primaryTable.GetRowCount();
+
+            if (rowCount == 0)
+            {
+                throw new InvalidOperationException($"Primary table '{map.PrimaryTableName}' has no rows.");
+            }
+
             var list = new List<T>();
 
             for (var i = 0; i < count; i++)
             {
+                // Determine which row to use from the primary table based on strategy
+                int rowIndex;
+                if (strategy == SelectionStrategy.Sequential)
+                {
+                    rowIndex = i % rowCount; // Wrap around if count > rowCount
+                }
+                else // Random
+                {
+                    rowIndex = _random.Next(0, rowCount);
+                }
+
+                // Get the primary row
+                var primaryRow = primaryTable[rowIndex];
+
+                // Create the entity and populate its properties
                 var item = new T();
                 foreach (var mapping in map.Mappings)
                 {
                     var property = typeof(T).GetProperty(mapping.Key);
                     if (property != null)
                     {
-                        // Get the table once per mapping
-                        var table = _dataProvider[mapping.Value.TableName];
-                        var rowCount = table.GetRowCount();
-
-                        if (rowCount == 0)
-                        {
-                            throw new InvalidOperationException($"Table '{mapping.Value.TableName}' has no rows.");
-                        }
-
-                        // Determine which row to use based on strategy
-                        int rowIndex;
-                        if (strategy == SelectionStrategy.Sequential)
-                        {
-                            rowIndex = i % rowCount; // Wrap around if count > rowCount
-                        }
-                        else // Random
-                        {
-                            rowIndex = _random.Next(0, rowCount);
-                        }
-
-                        // Get the row and pass it to the mapping function
-                        var row = table[rowIndex];
-                        var value = mapping.Value.MappingFunc(row);
+                        // Use the mapping strategy to get the value
+                        var value = mapping.Value.GetValue(primaryRow, _dataProvider);
 
                         // Set the property value with type conversion
-                        if (value != null && property.PropertyType != value.GetType())
+                        if (value != null && value != DBNull.Value)
                         {
-                            property.SetValue(item, Convert.ChangeType(value, property.PropertyType));
+                            if (property.PropertyType != value.GetType())
+                            {
+                                try
+                                {
+                                    property.SetValue(item, Convert.ChangeType(value, property.PropertyType));
+                                }
+                                catch (InvalidCastException)
+                                {
+                                    // If conversion fails, try setting directly (might be nullable)
+                                    property.SetValue(item, value);
+                                }
+                            }
+                            else
+                            {
+                                property.SetValue(item, value);
+                            }
                         }
                         else
                         {
-                            property.SetValue(item, value);
+                            // Set to null for nullable types or default for value types
+                            property.SetValue(item, null);
                         }
                     }
                 }
