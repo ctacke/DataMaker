@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Linq.Expressions;
 
 namespace DataMaker
@@ -35,7 +32,7 @@ namespace DataMaker
         /// <returns>The DataMap instance for fluent chaining.</returns>
         /// <example>
         /// <code>
-        /// dataMap.WithColumn(u => u.Name, "Name")
+        /// dataMap.WithColumn(u => u.Name, "FullName")
         /// </code>
         /// </example>
         public DataMap<T> WithColumn<TProp>(Expression<Func<T, TProp>> property, string columnName)
@@ -45,6 +42,29 @@ namespace DataMaker
 
             var propertyName = GetPropertyName(property);
             Mappings[propertyName] = new ColumnMapping(columnName);
+            return this;
+        }
+
+        /// <summary>
+        /// Maps a property to a column in the primary table using the property name as the column name.
+        /// Convenient when the property name matches the database column name.
+        /// </summary>
+        /// <typeparam name="TProp">The type of the property being mapped.</typeparam>
+        /// <param name="property">Expression identifying the property to map (e.g., u => u.Name).</param>
+        /// <returns>The DataMap instance for fluent chaining.</returns>
+        /// <example>
+        /// <code>
+        /// // Property Name matches column Name
+        /// dataMap.WithColumn(u => u.Name)  // Maps to "Name" column
+        /// dataMap.WithColumn(u => u.Email) // Maps to "Email" column
+        /// </code>
+        /// </example>
+        public DataMap<T> WithColumn<TProp>(Expression<Func<T, TProp>> property)
+        {
+            if (property == null) throw new ArgumentNullException(nameof(property));
+
+            var propertyName = GetPropertyName(property);
+            Mappings[propertyName] = new ColumnMapping(propertyName);
             return this;
         }
 
@@ -98,6 +118,118 @@ namespace DataMaker
             return this;
         }
 
+        /// <summary>
+        /// Maps a property to a data source using a custom mapping function that receives the primary row, data provider, and generation index.
+        /// </summary>
+        /// <typeparam name="TProp">The type of the property being mapped.</typeparam>
+        /// <param name="property">Expression identifying the property to map (e.g., u => u.Id).</param>
+        /// <param name="mappingFunc">Function that takes the primary row, data provider, and zero-based index, and returns the value for this property.</param>
+        /// <returns>The DataMap instance for fluent chaining.</returns>
+        /// <example>
+        /// <code>
+        /// // Generate sequential IDs starting at 1
+        /// dataMap.WithTableMap(u => u.Id, (row, provider, index) => index + 1)
+        ///
+        /// // Generate custom sequential values
+        /// dataMap.WithTableMap(u => u.OrderNumber, (row, provider, index) => $"ORD-{index + 1000:D5}")
+        /// </code>
+        /// </example>
+        public DataMap<T> WithTableMap<TProp>(Expression<Func<T, TProp>> property, Func<IDataRow, IDataProvider, int, object> mappingFunc)
+        {
+            if (property == null) throw new ArgumentNullException(nameof(property));
+            if (mappingFunc == null) throw new ArgumentNullException(nameof(mappingFunc));
+
+            var propertyName = GetPropertyName(property);
+            Mappings[propertyName] = new IndexedCustomMapping(mappingFunc);
+            return this;
+        }
+
+        /// <summary>
+        /// Maps a property to a sequential value starting from the specified start value.
+        /// Useful for generating sequential IDs or numbers.
+        /// </summary>
+        /// <typeparam name="TProp">The type of the property being mapped (must be numeric).</typeparam>
+        /// <param name="property">Expression identifying the property to map (e.g., u => u.Id).</param>
+        /// <param name="startValue">The starting value for the sequence. Defaults to 1.</param>
+        /// <returns>The DataMap instance for fluent chaining.</returns>
+        /// <example>
+        /// <code>
+        /// // Generate IDs starting at 1: 1, 2, 3, 4...
+        /// dataMap.WithSequence(u => u.Id)
+        ///
+        /// // Generate IDs starting at 1000: 1000, 1001, 1002...
+        /// dataMap.WithSequence(u => u.OrderId, startValue: 1000)
+        /// </code>
+        /// </example>
+        public DataMap<T> WithSequence<TProp>(Expression<Func<T, TProp>> property, int startValue = 1)
+        {
+            if (property == null) throw new ArgumentNullException(nameof(property));
+
+            var propertyName = GetPropertyName(property);
+            Mappings[propertyName] = new SequenceMapping(startValue);
+            return this;
+        }
+
+        /// <summary>
+        /// Maps a property to a generated value using a function.
+        /// Useful for generating GUIDs, timestamps, or other computed values.
+        /// </summary>
+        /// <typeparam name="TProp">The type of the property being mapped.</typeparam>
+        /// <param name="property">Expression identifying the property to map (e.g., p => p.Id).</param>
+        /// <param name="valueFunc">Function that generates the value for this property.</param>
+        /// <returns>The DataMap instance for fluent chaining.</returns>
+        /// <example>
+        /// <code>
+        /// // Generate GUIDs
+        /// dataMap.WithValue(p => p.Id, () => Guid.NewGuid())
+        ///
+        /// // Generate timestamps
+        /// dataMap.WithValue(p => p.CreatedAt, () => DateTime.UtcNow)
+        ///
+        /// // Generate random values
+        /// dataMap.WithValue(p => p.RandomNumber, () => Random.Shared.Next(1, 100))
+        /// </code>
+        /// </example>
+        public DataMap<T> WithValue<TProp>(Expression<Func<T, TProp>> property, Func<object> valueFunc)
+        {
+            if (property == null) throw new ArgumentNullException(nameof(property));
+            if (valueFunc == null) throw new ArgumentNullException(nameof(valueFunc));
+
+            var propertyName = GetPropertyName(property);
+            Mappings[propertyName] = new ValueMapping(valueFunc);
+            return this;
+        }
+
+        /// <summary>
+        /// Maps a property to a generated value using a function that receives the generation index.
+        /// Useful for generating indexed values, formatted IDs, or sequential computed values.
+        /// </summary>
+        /// <typeparam name="TProp">The type of the property being mapped.</typeparam>
+        /// <param name="property">Expression identifying the property to map (e.g., p => p.Code).</param>
+        /// <param name="valueFunc">Function that takes the zero-based generation index and returns the value for this property.</param>
+        /// <returns>The DataMap instance for fluent chaining.</returns>
+        /// <example>
+        /// <code>
+        /// // Generate formatted product codes
+        /// dataMap.WithValue(p => p.Code, index => $"PROD-{index + 1:D5}")  // PROD-00001, PROD-00002...
+        ///
+        /// // Generate email addresses with index
+        /// dataMap.WithValue(p => p.Email, index => $"user{index + 1}@example.com")
+        ///
+        /// // Generate alternating values based on index
+        /// dataMap.WithValue(p => p.Type, index => index % 2 == 0 ? "TypeA" : "TypeB")
+        /// </code>
+        /// </example>
+        public DataMap<T> WithValue<TProp>(Expression<Func<T, TProp>> property, Func<int, object> valueFunc)
+        {
+            if (property == null) throw new ArgumentNullException(nameof(property));
+            if (valueFunc == null) throw new ArgumentNullException(nameof(valueFunc));
+
+            var propertyName = GetPropertyName(property);
+            Mappings[propertyName] = new IndexedValueMapping(valueFunc);
+            return this;
+        }
+
         private string GetPropertyName<TProp>(Expression<Func<T, TProp>> property)
         {
             if (property.Body is MemberExpression member)
@@ -113,7 +245,7 @@ namespace DataMaker
     /// </summary>
     internal interface IPropertyMapping
     {
-        object GetValue(IDataRow primaryRow, IDataProvider provider);
+        object GetValue(IDataRow primaryRow, IDataProvider provider, int index);
     }
 
     /// <summary>
@@ -128,7 +260,7 @@ namespace DataMaker
             _columnName = columnName;
         }
 
-        public object GetValue(IDataRow primaryRow, IDataProvider provider)
+        public object GetValue(IDataRow primaryRow, IDataProvider provider, int index)
         {
             return primaryRow[_columnName];
         }
@@ -152,7 +284,7 @@ namespace DataMaker
             _relatedColumnName = relatedColumnName;
         }
 
-        public object GetValue(IDataRow primaryRow, IDataProvider provider)
+        public object GetValue(IDataRow primaryRow, IDataProvider provider, int index)
         {
             var foreignKeyValue = primaryRow[_foreignKeyColumn];
             if (foreignKeyValue == null || foreignKeyValue == DBNull.Value)
@@ -183,9 +315,81 @@ namespace DataMaker
             _mappingFunc = mappingFunc;
         }
 
-        public object GetValue(IDataRow primaryRow, IDataProvider provider)
+        public object GetValue(IDataRow primaryRow, IDataProvider provider, int index)
         {
             return _mappingFunc(primaryRow, provider);
+        }
+    }
+
+    /// <summary>
+    /// Maps a property using a custom function that has access to the generation index.
+    /// </summary>
+    internal class IndexedCustomMapping : IPropertyMapping
+    {
+        private readonly Func<IDataRow, IDataProvider, int, object> _mappingFunc;
+
+        public IndexedCustomMapping(Func<IDataRow, IDataProvider, int, object> mappingFunc)
+        {
+            _mappingFunc = mappingFunc;
+        }
+
+        public object GetValue(IDataRow primaryRow, IDataProvider provider, int index)
+        {
+            return _mappingFunc(primaryRow, provider, index);
+        }
+    }
+
+    /// <summary>
+    /// Maps a property to a sequential numeric value.
+    /// </summary>
+    internal class SequenceMapping : IPropertyMapping
+    {
+        private readonly int _startValue;
+
+        public SequenceMapping(int startValue)
+        {
+            _startValue = startValue;
+        }
+
+        public object GetValue(IDataRow primaryRow, IDataProvider provider, int index)
+        {
+            return _startValue + index;
+        }
+    }
+
+    /// <summary>
+    /// Maps a property to a generated value.
+    /// </summary>
+    internal class ValueMapping : IPropertyMapping
+    {
+        private readonly Func<object> _valueFunc;
+
+        public ValueMapping(Func<object> valueFunc)
+        {
+            _valueFunc = valueFunc;
+        }
+
+        public object GetValue(IDataRow primaryRow, IDataProvider provider, int index)
+        {
+            return _valueFunc();
+        }
+    }
+
+    /// <summary>
+    /// Maps a property to a generated value with access to the generation index.
+    /// </summary>
+    internal class IndexedValueMapping : IPropertyMapping
+    {
+        private readonly Func<int, object> _valueFunc;
+
+        public IndexedValueMapping(Func<int, object> valueFunc)
+        {
+            _valueFunc = valueFunc;
+        }
+
+        public object GetValue(IDataRow primaryRow, IDataProvider provider, int index)
+        {
+            return _valueFunc(index);
         }
     }
 }

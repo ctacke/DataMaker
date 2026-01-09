@@ -7,16 +7,16 @@ namespace DataMaker
     /// <summary>
     /// Main class for generating test data entities from data sources.
     /// </summary>
-    public class DataMaker
+    public class Generator
     {
         private IDataProvider? _dataProvider;
         private readonly Dictionary<Type, object> _dataMaps = new Dictionary<Type, object>();
         private readonly Random _random = new Random();
 
         /// <summary>
-        /// Initializes a new instance of the DataMaker class.
+        /// Initializes a new instance of the Generator class.
         /// </summary>
-        public DataMaker()
+        public Generator()
         {
         }
 
@@ -96,8 +96,8 @@ namespace DataMaker
                     var property = typeof(T).GetProperty(mapping.Key);
                     if (property != null)
                     {
-                        // Use the mapping strategy to get the value
-                        var value = mapping.Value.GetValue(primaryRow, _dataProvider);
+                        // Use the mapping strategy to get the value, passing the generation index
+                        var value = mapping.Value.GetValue(primaryRow, _dataProvider, i);
 
                         // Set the property value with type conversion
                         if (value != null && value != DBNull.Value)

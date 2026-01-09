@@ -49,19 +49,19 @@ dotnet build
 ```csharp
 using DataMaker;
 
-// 1. Create a DataMaker instance
-var maker = new DataMaker();
+// 1. Create a Generator instance
+var generator = new Generator();
 
 // 2. Add a data provider (SQL Server, CSV, etc.)
-maker.AddProvider(new SqlServerDataProvider("YourConnectionString"));
+generator.AddProvider(new SqlServerDataProvider("YourConnectionString"));
 
 // 3. Configure mappings for your entity
-maker.AddDataMap<User>("Users")  // Primary table name
+generator.AddDataMap<User>("Users")  // Primary table name
     .WithColumn(u => u.Name, "Name")
     .WithColumn(u => u.Email, "Email");
 
 // 4. Generate test data
-var users = maker.Generate<User>(10);  // Generate 10 users
+var users = generator.Generate<User>(10);  // Generate 10 users
 
 foreach (var user in users)
 {
@@ -87,12 +87,18 @@ public class User
 Data providers implement `IDataProvider` and retrieve data from a source. DataMaker currently includes:
 
 - **SqlServerDataProvider** - Retrieves data from SQL Server databases
+- **SqliteDataProvider** - Retrieves data from SQLite databases
 
 ```csharp
-var provider = new SqlServerDataProvider(
+// SQL Server
+var sqlProvider = new SqlServerDataProvider(
     "Server=.;Database=TestDb;Integrated Security=True;"
 );
-maker.AddProvider(provider);
+generator.AddProvider(sqlProvider);
+
+// SQLite - accepts file path or connection string
+var sqliteProvider = new SqliteDataProvider("path/to/database.sqlite");
+generator.AddProvider(sqliteProvider);
 ```
 
 ### 2. Primary Tables
@@ -100,7 +106,7 @@ maker.AddProvider(provider);
 Each entity maps to a primary table. When generating data, DataMaker selects rows from this table based on your chosen strategy.
 
 ```csharp
-maker.AddDataMap<Product>("Products")  // "Products" is the primary table
+generator.AddDataMap<Product>("Products")  // "Products" is the primary table
 ```
 
 ### 3. Selection Strategies
@@ -109,10 +115,10 @@ Control how rows are selected from the primary table:
 
 ```csharp
 // Sequential - rows 0, 1, 2, 3... (wraps around if count > rows)
-var sequential = maker.Generate<User>(10, SelectionStrategy.Sequential);
+var sequential = generator.Generate<User>(10, SelectionStrategy.Sequential);
 
 // Random - randomly selected rows
-var random = maker.Generate<User>(10, SelectionStrategy.Random);
+var random = generator.Generate<User>(10, SelectionStrategy.Random);
 ```
 
 ## Mapping Methods
@@ -122,9 +128,25 @@ var random = maker.Generate<User>(10, SelectionStrategy.Random);
 Maps a property directly to a column in the primary table.
 
 ```csharp
-maker.AddDataMap<User>("Users")
+generator.AddDataMap<User>("Users")
     .WithColumn(u => u.Name, "FullName")
     .WithColumn(u => u.Email, "EmailAddress");
+```
+
+### WithSequence - Sequential Value Generation
+
+Generates sequential numeric values, perfect for IDs or counters.
+
+```csharp
+// Generate sequential IDs starting at 1: 1, 2, 3, 4...
+generator.AddDataMap<User>("Users")
+    .WithSequence(u => u.Id)
+    .WithColumn(u => u.Name, "Name");
+
+// Generate IDs starting at a specific value
+generator.AddDataMap<Order>("Orders")
+    .WithSequence(o => o.OrderId, startValue: 1000)  // 1000, 1001, 1002...
+    .WithColumn(o => o.Description, "Description");
 ```
 
 ### WithLookup - Foreign Key Relationships
@@ -132,7 +154,7 @@ maker.AddDataMap<User>("Users")
 Automatically resolves foreign key relationships to related tables.
 
 ```csharp
-maker.AddDataMap<User>("Users")
+generator.AddDataMap<User>("Users")
     .WithColumn(u => u.Name, "Name")
     .WithLookup(
         u => u.City,           // Target property
@@ -154,7 +176,7 @@ maker.AddDataMap<User>("Users")
 For complex scenarios, use custom mapping functions with access to the row and provider.
 
 ```csharp
-maker.AddDataMap<User>("Users")
+generator.AddDataMap<User>("Users")
     .WithColumn(u => u.FirstName, "FirstName")
     .WithColumn(u => u.LastName, "LastName")
     .WithTableMap(
@@ -163,7 +185,37 @@ maker.AddDataMap<User>("Users")
     );
 ```
 
+**With Index Access** - For custom sequential or computed values:
+
+```csharp
+generator.AddDataMap<Order>("Orders")
+    .WithTableMap(o => o.OrderNumber, (row, provider, index) => $"ORD-{index + 1000:D5}")  // ORD-01000, ORD-01001...
+    .WithTableMap(o => o.CustomId, (row, provider, index) => index + 1)  // Sequential: 1, 2, 3...
+    .WithColumn(o => o.Description, "Description");
+```
+
 ## Advanced Examples
+
+### Sequential ID Generation
+
+Generate entities with auto-incrementing IDs without pulling them from the database:
+
+```csharp
+public class Customer
+{
+    public int Id { get; set; }
+    public string? Name { get; set; }
+    public string? Email { get; set; }
+}
+
+generator.AddDataMap<Customer>("Customers")
+    .WithSequence(c => c.Id)  // Auto-generate: 1, 2, 3, 4...
+    .WithColumn(c => c.Name, "Name")
+    .WithColumn(c => c.Email, "Email");
+
+var customers = generator.Generate<Customer>(100);
+// Creates customers with IDs from 1 to 100
+```
 
 ### Complex Entity with Multiple Lookups
 
@@ -176,7 +228,7 @@ public class Order
     public decimal? Price { get; set; }
 }
 
-maker.AddDataMap<Order>("Orders")
+generator.AddDataMap<Order>("Orders")
     .WithColumn(o => o.OrderNumber, "OrderNum")
     .WithLookup(o => o.CustomerName, "Customers", "CustomerId", "Id", "Name")
     .WithLookup(o => o.ProductName, "Products", "ProductId", "Id", "Name")
@@ -186,7 +238,7 @@ maker.AddDataMap<Order>("Orders")
 ### Combining Multiple Tables
 
 ```csharp
-maker.AddDataMap<Employee>("Employees")
+generator.AddDataMap<Employee>("Employees")
     .WithColumn(e => e.EmployeeId, "Id")
     .WithColumn(e => e.FirstName, "FirstName")
     .WithColumn(e => e.LastName, "LastName")
@@ -195,13 +247,13 @@ maker.AddDataMap<Employee>("Employees")
     .WithLookup(e => e.City, "Addresses", "AddressId", "Id", "City")
     .WithLookup(e => e.State, "Addresses", "AddressId", "Id", "State");
 
-var employees = maker.Generate<Employee>(50, SelectionStrategy.Random);
+var employees = generator.Generate<Employee>(50, SelectionStrategy.Random);
 ```
 
 ### Custom Data Transformation
 
 ```csharp
-maker.AddDataMap<Product>("Products")
+generator.AddDataMap<Product>("Products")
     .WithColumn(p => p.Name, "ProductName")
     .WithTableMap(
         p => p.DisplayName,
@@ -214,9 +266,40 @@ maker.AddDataMap<Product>("Products")
     );
 ```
 
+### Custom Sequential Formats
+
+Generate formatted IDs, order numbers, or codes using the index:
+
+```csharp
+public class Invoice
+{
+    public int Id { get; set; }
+    public string? InvoiceNumber { get; set; }
+    public string? ReferenceCode { get; set; }
+    public decimal? Amount { get; set; }
+}
+
+generator.AddDataMap<Invoice>("Invoices")
+    .WithSequence(i => i.Id)  // Simple numeric: 1, 2, 3...
+    .WithTableMap(
+        i => i.InvoiceNumber,
+        (row, provider, index) => $"INV-2024-{index + 1:D6}")  // INV-2024-000001, INV-2024-000002...
+    .WithTableMap(
+        i => i.ReferenceCode,
+        (row, provider, index) =>
+        {
+            var year = DateTime.Now.Year;
+            var month = DateTime.Now.Month;
+            return $"{year}{month:D2}-{index + 1000}";  // 202401-1000, 202401-1001...
+        })
+    .WithColumn(i => i.Amount, "Amount");
+
+var invoices = generator.Generate<Invoice>(50);
+```
+
 ## API Reference
 
-### DataMaker Class
+### Generator Class
 
 | Method | Description |
 |--------|-------------|
@@ -229,8 +312,9 @@ maker.AddDataMap<Product>("Products")
 | Method | Description |
 |--------|-------------|
 | `WithColumn(property, columnName)` | Maps property to column in primary table |
+| `WithSequence(property, startValue)` | Generates sequential numeric values (default starts at 1) |
 | `WithLookup(property, table, fk, pk, column)` | Maps property using foreign key lookup |
-| `WithTableMap(property, func)` | Maps property using custom function |
+| `WithTableMap(property, func)` | Maps property using custom function (with optional index parameter) |
 
 ### SelectionStrategy Enum
 
@@ -273,7 +357,7 @@ public class CsvDataProvider : IDataProvider
 
 ## Best Practices
 
-1. **Reuse DataMaker instances** - Configure once, generate many times
+1. **Reuse Generator instances** - Configure once, generate many times
 2. **Use WithColumn for simple mappings** - More performant than custom functions
 3. **Cache related table data** - Providers cache table data automatically
 4. **Validate your mappings** - Run tests to ensure foreign keys resolve correctly
