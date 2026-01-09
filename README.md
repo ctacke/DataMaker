@@ -37,7 +37,7 @@ Install-Package DataMaker
 ### Build from Source
 
 ```bash
-git clone https://github.com/yourusername/DataMaker.git
+git clone https://github.com/ctacke/DataMaker.git
 cd DataMaker
 dotnet build
 ```
@@ -128,9 +128,16 @@ var random = generator.Generate<User>(10, SelectionStrategy.Random);
 Maps a property directly to a column in the primary table.
 
 ```csharp
+// Explicit column name (when property name differs from column name)
 generator.AddDataMap<User>("Users")
     .WithColumn(u => u.Name, "FullName")
     .WithColumn(u => u.Email, "EmailAddress");
+
+// Auto-mapping (when property name matches column name)
+generator.AddDataMap<Product>("Products")
+    .WithColumn(p => p.Name)           // Maps to "Name" column
+    .WithColumn(p => p.Price)          // Maps to "Price" column
+    .WithColumn(p => p.Cost, "StandardCost");  // Explicit when different
 ```
 
 ### WithSequence - Sequential Value Generation
@@ -141,12 +148,35 @@ Generates sequential numeric values, perfect for IDs or counters.
 // Generate sequential IDs starting at 1: 1, 2, 3, 4...
 generator.AddDataMap<User>("Users")
     .WithSequence(u => u.Id)
-    .WithColumn(u => u.Name, "Name");
+    .WithColumn(u => u.Name);
 
 // Generate IDs starting at a specific value
 generator.AddDataMap<Order>("Orders")
     .WithSequence(o => o.OrderId, startValue: 1000)  // 1000, 1001, 1002...
-    .WithColumn(o => o.Description, "Description");
+    .WithColumn(o => o.Description);
+```
+
+### WithValue - Generated Values
+
+Generates values using custom functions. Perfect for GUIDs, timestamps, or computed values.
+
+```csharp
+// Generate GUIDs
+generator.AddDataMap<Product>("Products")
+    .WithValue(p => p.Id, () => Guid.NewGuid())
+    .WithColumn(p => p.Name);
+
+// Generate timestamps
+generator.AddDataMap<Event>("Events")
+    .WithValue(e => e.CreatedAt, () => DateTime.UtcNow)
+    .WithColumn(e => e.Description);
+
+// Generate values with index access
+generator.AddDataMap<User>("Users")
+    .WithValue(u => u.Username, index => $"user{index + 1}")           // user1, user2, user3...
+    .WithValue(u => u.Email, index => $"user{index + 1}@example.com")  // user1@example.com...
+    .WithValue(u => u.Code, index => $"USR-{index + 1:D5}")            // USR-00001, USR-00002...
+    .WithColumn(u => u.FirstName);
 ```
 
 ### WithLookup - Foreign Key Relationships
@@ -297,6 +327,66 @@ generator.AddDataMap<Invoice>("Invoices")
 var invoices = generator.Generate<Invoice>(50);
 ```
 
+### SQLite with Auto-Mapping and Generated Values
+
+Combine SQLite provider with auto-mapping and value generation:
+
+```csharp
+public class Order
+{
+    public Guid Id { get; set; }
+    public int OrderNumber { get; set; }
+    public string? CustomerName { get; set; }
+    public string? ProductName { get; set; }
+    public decimal? Price { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+var generator = new Generator();
+generator.AddProvider(new SqliteDataProvider("Northwind.sqlite"));
+
+generator.AddDataMap<Order>("Orders")
+    .WithValue(o => o.Id, () => Guid.NewGuid())                     // Generate GUID
+    .WithValue(o => o.OrderNumber, index => 1000 + index)           // Sequential: 1000, 1001...
+    .WithValue(o => o.CreatedAt, () => DateTime.UtcNow)             // Timestamp
+    .WithColumn(o => o.CustomerName)                                // Auto-map to "CustomerName"
+    .WithColumn(o => o.ProductName)                                 // Auto-map to "ProductName"
+    .WithColumn(o => o.Price);                                      // Auto-map to "Price"
+
+var orders = generator.Generate<Order>(50);
+```
+
+### Custom Sequential Formats
+
+Generate formatted IDs, order numbers, or codes using the index:
+
+```csharp
+public class Invoice
+{
+    public int Id { get; set; }
+    public string? InvoiceNumber { get; set; }
+    public string? ReferenceCode { get; set; }
+    public decimal? Amount { get; set; }
+}
+
+generator.AddDataMap<Invoice>("Invoices")
+    .WithSequence(i => i.Id)  // Simple numeric: 1, 2, 3...
+    .WithTableMap(
+        i => i.InvoiceNumber,
+        (row, provider, index) => $"INV-2024-{index + 1:D6}")  // INV-2024-000001, INV-2024-000002...
+    .WithTableMap(
+        i => i.ReferenceCode,
+        (row, provider, index) =>
+        {
+            var year = DateTime.Now.Year;
+            var month = DateTime.Now.Month;
+            return $"{year}{month:D2}-{index + 1000}";  // 202401-1000, 202401-1001...
+        })
+    .WithColumn(i => i.Amount, "Amount");
+
+var invoices = generator.Generate<Invoice>(50);
+```
+
 ## API Reference
 
 ### Generator Class
@@ -311,8 +401,11 @@ var invoices = generator.Generate<Invoice>(50);
 
 | Method | Description |
 |--------|-------------|
-| `WithColumn(property, columnName)` | Maps property to column in primary table |
+| `WithColumn(property)` | Maps property to column with same name in primary table |
+| `WithColumn(property, columnName)` | Maps property to specified column in primary table |
 | `WithSequence(property, startValue)` | Generates sequential numeric values (default starts at 1) |
+| `WithValue(property, func)` | Generates values using a function (GUIDs, timestamps, etc.) |
+| `WithValue(property, indexFunc)` | Generates values using a function with index access |
 | `WithLookup(property, table, fk, pk, column)` | Maps property using foreign key lookup |
 | `WithTableMap(property, func)` | Maps property using custom function (with optional index parameter) |
 
@@ -329,6 +422,7 @@ var invoices = generator.Generate<Invoice>(50);
 
 ```csharp
 var provider = new SqlServerDataProvider(connectionString);
+generator.AddProvider(provider);
 ```
 
 **Features:**
@@ -337,6 +431,30 @@ var provider = new SqlServerDataProvider(connectionString);
 - Support for standard SQL Server table naming conventions
 
 **Security:** Table names are validated using a whitelist pattern (alphanumeric, underscore, period, brackets only).
+
+### SQLite Provider
+
+```csharp
+// Option 1: File path
+var provider = new SqliteDataProvider("path/to/database.sqlite");
+generator.AddProvider(provider);
+
+// Option 2: Connection string
+var provider = new SqliteDataProvider("Data Source=path/to/database.sqlite");
+generator.AddProvider(provider);
+```
+
+**Features:**
+- Supports file paths or full connection strings
+- Automatic file validation
+- Lazy loading and caching of table data
+- SQL injection protection via table name validation
+- Perfect for lightweight databases and testing scenarios
+
+**Use Cases:**
+- Unit testing with embedded test databases
+- Prototyping with sample data
+- Generating test data from Northwind or other sample SQLite databases
 
 ### Creating Custom Providers
 
@@ -397,9 +515,10 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## Roadmap
 
+- [x] SQLite data provider - **Completed**
 - [ ] CSV data provider implementation
 - [ ] JSON data provider
-- [ ] Support for multiple data providers in single DataMaker instance
+- [ ] Support for multiple data providers in single Generator instance
 - [ ] Performance optimizations for large datasets
 - [ ] Fluent assertion extensions for testing
 - [ ] Table join support
@@ -412,7 +531,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Support
 
 For issues, questions, or suggestions:
-- Open an issue on [GitHub](https://github.com/yourusername/DataMaker/issues)
+- Open an issue on [GitHub](https://github.com/ctacke/DataMaker/issues)
 - Check existing issues for solutions
 - Review the examples in the test project
 
