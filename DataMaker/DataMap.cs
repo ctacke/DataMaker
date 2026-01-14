@@ -10,16 +10,21 @@ namespace DataMaker
     {
         internal readonly string PrimaryTableName;
         internal readonly Dictionary<string, IPropertyMapping> Mappings = new Dictionary<string, IPropertyMapping>();
+        private readonly Generator _generator;
 
         /// <summary>
         /// Initializes a new DataMap with the specified primary table.
         /// </summary>
+        /// <param name="generator">The generator instance.</param>
         /// <param name="primaryTableName">The name of the primary table for this entity.</param>
-        public DataMap(string primaryTableName)
+        public DataMap(Generator generator, string primaryTableName)
         {
             if (string.IsNullOrWhiteSpace(primaryTableName))
+            {
                 throw new ArgumentException("Primary table name cannot be null or empty.", nameof(primaryTableName));
+            }
 
+            _generator = generator;
             PrimaryTableName = primaryTableName;
         }
 
@@ -37,8 +42,15 @@ namespace DataMaker
         /// </example>
         public DataMap<T> WithColumn<TProp>(Expression<Func<T, TProp>> property, string columnName)
         {
-            if (property == null) throw new ArgumentNullException(nameof(property));
-            if (string.IsNullOrWhiteSpace(columnName)) throw new ArgumentException("Column name cannot be null or empty.", nameof(columnName));
+            if (property == null)
+            {
+                throw new ArgumentNullException(nameof(property));
+            }
+
+            if (string.IsNullOrWhiteSpace(columnName))
+            {
+                throw new ArgumentException("Column name cannot be null or empty.", nameof(columnName));
+            }
 
             var propertyName = GetPropertyName(property);
             Mappings[propertyName] = new ColumnMapping(columnName);
@@ -61,7 +73,10 @@ namespace DataMaker
         /// </example>
         public DataMap<T> WithColumn<TProp>(Expression<Func<T, TProp>> property)
         {
-            if (property == null) throw new ArgumentNullException(nameof(property));
+            if (property == null)
+            {
+                throw new ArgumentNullException(nameof(property));
+            }
 
             var propertyName = GetPropertyName(property);
             Mappings[propertyName] = new ColumnMapping(propertyName);
@@ -85,11 +100,30 @@ namespace DataMaker
         /// </example>
         public DataMap<T> WithLookup<TProp>(Expression<Func<T, TProp>> property, string relatedTableName, string foreignKeyColumn, string relatedKeyColumn, string relatedColumnName)
         {
-            if (property == null) throw new ArgumentNullException(nameof(property));
-            if (string.IsNullOrWhiteSpace(relatedTableName)) throw new ArgumentException("Related table name cannot be null or empty.", nameof(relatedTableName));
-            if (string.IsNullOrWhiteSpace(foreignKeyColumn)) throw new ArgumentException("Foreign key column cannot be null or empty.", nameof(foreignKeyColumn));
-            if (string.IsNullOrWhiteSpace(relatedKeyColumn)) throw new ArgumentException("Related key column cannot be null or empty.", nameof(relatedKeyColumn));
-            if (string.IsNullOrWhiteSpace(relatedColumnName)) throw new ArgumentException("Related column name cannot be null or empty.", nameof(relatedColumnName));
+            if (property == null)
+            {
+                throw new ArgumentNullException(nameof(property));
+            }
+
+            if (string.IsNullOrWhiteSpace(relatedTableName))
+            {
+                throw new ArgumentException("Related table name cannot be null or empty.", nameof(relatedTableName));
+            }
+
+            if (string.IsNullOrWhiteSpace(foreignKeyColumn))
+            {
+                throw new ArgumentException("Foreign key column cannot be null or empty.", nameof(foreignKeyColumn));
+            }
+
+            if (string.IsNullOrWhiteSpace(relatedKeyColumn))
+            {
+                throw new ArgumentException("Related key column cannot be null or empty.", nameof(relatedKeyColumn));
+            }
+
+            if (string.IsNullOrWhiteSpace(relatedColumnName))
+            {
+                throw new ArgumentException("Related column name cannot be null or empty.", nameof(relatedColumnName));
+            }
 
             var propertyName = GetPropertyName(property);
             Mappings[propertyName] = new LookupMapping(relatedTableName, foreignKeyColumn, relatedKeyColumn, relatedColumnName);
@@ -110,8 +144,15 @@ namespace DataMaker
         /// </example>
         public DataMap<T> WithTableMap<TProp>(Expression<Func<T, TProp>> property, Func<IDataRow, IDataProvider, object> mappingFunc)
         {
-            if (property == null) throw new ArgumentNullException(nameof(property));
-            if (mappingFunc == null) throw new ArgumentNullException(nameof(mappingFunc));
+            if (property == null)
+            {
+                throw new ArgumentNullException(nameof(property));
+            }
+
+            if (mappingFunc == null)
+            {
+                throw new ArgumentNullException(nameof(mappingFunc));
+            }
 
             var propertyName = GetPropertyName(property);
             Mappings[propertyName] = new CustomMapping(mappingFunc);
@@ -136,8 +177,15 @@ namespace DataMaker
         /// </example>
         public DataMap<T> WithTableMap<TProp>(Expression<Func<T, TProp>> property, Func<IDataRow, IDataProvider, int, object> mappingFunc)
         {
-            if (property == null) throw new ArgumentNullException(nameof(property));
-            if (mappingFunc == null) throw new ArgumentNullException(nameof(mappingFunc));
+            if (property == null)
+            {
+                throw new ArgumentNullException(nameof(property));
+            }
+
+            if (mappingFunc == null)
+            {
+                throw new ArgumentNullException(nameof(mappingFunc));
+            }
 
             var propertyName = GetPropertyName(property);
             Mappings[propertyName] = new IndexedCustomMapping(mappingFunc);
@@ -163,7 +211,10 @@ namespace DataMaker
         /// </example>
         public DataMap<T> WithSequence<TProp>(Expression<Func<T, TProp>> property, int startValue = 1)
         {
-            if (property == null) throw new ArgumentNullException(nameof(property));
+            if (property == null)
+            {
+                throw new ArgumentNullException(nameof(property));
+            }
 
             var propertyName = GetPropertyName(property);
             Mappings[propertyName] = new SequenceMapping(startValue);
@@ -192,8 +243,15 @@ namespace DataMaker
         /// </example>
         public DataMap<T> WithValue<TProp>(Expression<Func<T, TProp>> property, Func<object> valueFunc)
         {
-            if (property == null) throw new ArgumentNullException(nameof(property));
-            if (valueFunc == null) throw new ArgumentNullException(nameof(valueFunc));
+            if (property == null)
+            {
+                throw new ArgumentNullException(nameof(property));
+            }
+
+            if (valueFunc == null)
+            {
+                throw new ArgumentNullException(nameof(valueFunc));
+            }
 
             var propertyName = GetPropertyName(property);
             Mappings[propertyName] = new ValueMapping(valueFunc);
@@ -222,11 +280,114 @@ namespace DataMaker
         /// </example>
         public DataMap<T> WithValue<TProp>(Expression<Func<T, TProp>> property, Func<int, object> valueFunc)
         {
-            if (property == null) throw new ArgumentNullException(nameof(property));
-            if (valueFunc == null) throw new ArgumentNullException(nameof(valueFunc));
+            if (property == null)
+            {
+                throw new ArgumentNullException(nameof(property));
+            }
+
+            if (valueFunc == null)
+            {
+                throw new ArgumentNullException(nameof(valueFunc));
+            }
 
             var propertyName = GetPropertyName(property);
             Mappings[propertyName] = new IndexedValueMapping(valueFunc);
+            return this;
+        }
+
+        /// <summary>
+        /// Maps a property to a transformed column in the primary table.
+        /// </summary>
+        /// <typeparam name="TProp">The type of the property being mapped.</typeparam>
+        /// <param name="property">Expression identifying the property to map (e.g., u => u.ShortName).</param>
+        /// <param name="columnName">The name of the column in the primary table to transform.</param>
+        /// <param name="transformFunc">Function that takes the generation index and original column value, and returns the transformed value.</param>
+        /// <returns>The DataMap instance for fluent chaining.</returns>
+        /// <example>
+        /// <code>
+        /// dataMap.WithColumnTransform(p => p.ShortName, "LongName", (index, value) => value.ToString().Substring(0, 10))
+        /// </code>
+        /// </example>
+        public DataMap<T> WithColumnTransform<TProp>(Expression<Func<T, TProp>> property, string columnName, Func<int, object?, object?> transformFunc)
+        {
+            if (property == null)
+            {
+                throw new ArgumentNullException(nameof(property));
+            }
+
+            if (string.IsNullOrWhiteSpace(columnName))
+            {
+                throw new ArgumentException("Column name cannot be null or empty.", nameof(columnName));
+            }
+
+            if (transformFunc == null)
+            {
+                throw new ArgumentNullException(nameof(transformFunc));
+            }
+
+            var propertyName = GetPropertyName(property);
+            Mappings[propertyName] = new ColumnTransformMapping(columnName, transformFunc);
+            return this;
+        }
+
+        /// <summary>
+        /// Maps a property to a generated person name using a custom formatter.
+        /// </summary>
+        /// <typeparam name="TProp">The type of the property being mapped.</typeparam>
+        /// <param name="property">Expression identifying the property to map (e.g., u => u.Name).</param>
+        /// <param name="formatter">Function that takes a <see cref="PersonData"/> object and returns the formatted value.</param>
+        /// <returns>The DataMap instance for fluent chaining.</returns>
+        /// <example>
+        /// <code>
+        /// dataMap.WithPersonData(u => u.Name, (data) => $"{data.FirstName} {data.LastName}")
+        /// dataMap.WithPersonData(u => u.Name, (data) => $"{data.LastName}, {data.FirstName}")
+        /// </code>
+        /// </example>
+        public DataMap<T> WithPersonData<TProp>(Expression<Func<T, TProp>> property, Func<PersonData, object> formatter)
+        {
+            if (property == null)
+            {
+                throw new ArgumentNullException(nameof(property));
+            }
+
+            if (formatter == null)
+            {
+                throw new ArgumentNullException(nameof(formatter));
+            }
+
+            var propertyName = GetPropertyName(property);
+            Mappings[propertyName] = new PersonDataMapping(formatter);
+            return this;
+        }
+
+        /// <summary>
+        /// Maps a property to a generated address value using a custom accessor.
+        /// </summary>
+        /// <typeparam name="TProp">The type of the property being mapped.</typeparam>
+        /// <param name="property">Expression identifying the property to map (e.g., u => u.City).</param>
+        /// <param name="accessor">Function that takes an <see cref="AddressData"/> object and returns the desired field.</param>
+        /// <returns>The DataMap instance for fluent chaining.</returns>
+        /// <example>
+        /// <code>
+        /// dataMap.WithAddressData(u => u.Street, a => a.StreetAddress)
+        /// dataMap.WithAddressData(u => u.City, a => a.City)
+        /// dataMap.WithAddressData(u => u.State, a => a.State)
+        /// </code>
+        /// </example>
+        public DataMap<T> WithAddressData<TProp>(Expression<Func<T, TProp>> property, Func<AddressData, object> accessor)
+        {
+            if (property == null)
+            {
+                throw new ArgumentNullException(nameof(property));
+            }
+
+            if (accessor == null)
+            {
+                throw new ArgumentNullException(nameof(accessor));
+            }
+
+            var propertyName = GetPropertyName(property);
+            Mappings[propertyName] = new AddressDataMapping(_generator, accessor);
             return this;
         }
 
@@ -245,7 +406,7 @@ namespace DataMaker
     /// </summary>
     internal interface IPropertyMapping
     {
-        object GetValue(IDataRow primaryRow, IDataProvider provider, int index);
+        object? GetValue(IDataRow primaryRow, IDataProvider provider, int index);
     }
 
     /// <summary>
@@ -390,6 +551,27 @@ namespace DataMaker
         public object GetValue(IDataRow primaryRow, IDataProvider provider, int index)
         {
             return _valueFunc(index);
+        }
+    }
+
+    /// <summary>
+    /// Maps a property to a transformed column in the primary table.
+    /// </summary>
+    internal class ColumnTransformMapping : IPropertyMapping
+    {
+        private readonly string _columnName;
+        private readonly Func<int, object?, object?> _transformFunc;
+
+        public ColumnTransformMapping(string columnName, Func<int, object?, object?> transformFunc)
+        {
+            _columnName = columnName;
+            _transformFunc = transformFunc;
+        }
+
+        public object? GetValue(IDataRow primaryRow, IDataProvider provider, int index)
+        {
+            var originalValue = primaryRow[_columnName];
+            return _transformFunc(index, originalValue);
         }
     }
 }

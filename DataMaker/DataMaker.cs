@@ -12,12 +12,23 @@ namespace DataMaker
         private IDataProvider? _dataProvider;
         private readonly Dictionary<Type, object> _dataMaps = new Dictionary<Type, object>();
         private readonly Random _random = new Random();
+        private readonly Dictionary<int, AddressData> _addressCache = new();
 
         /// <summary>
         /// Initializes a new instance of the Generator class.
         /// </summary>
         public Generator()
         {
+        }
+
+        internal AddressData GetAddress(int index)
+        {
+            if (!_addressCache.TryGetValue(index, out var addressData))
+            {
+                addressData = AddressDataGenerator.Generate();
+                _addressCache[index] = addressData;
+            }
+            return addressData;
         }
 
         /// <summary>
@@ -37,7 +48,7 @@ namespace DataMaker
         /// <returns>A DataMap instance for configuring property mappings.</returns>
         public DataMap<T> AddDataMap<T>(string primaryTableName) where T : new()
         {
-            var map = new DataMap<T>(primaryTableName);
+            var map = new DataMap<T>(this, primaryTableName);
             _dataMaps[typeof(T)] = map;
             return map;
         }
@@ -61,6 +72,8 @@ namespace DataMaker
             {
                 throw new InvalidOperationException($"No data map found for type {typeof(T).Name}. Call AddDataMap<{typeof(T).Name}>() to configure mappings.");
             }
+
+            _addressCache.Clear();
 
             var map = (DataMap<T>)dataMap;
             var primaryTable = _dataProvider[map.PrimaryTableName];

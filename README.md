@@ -513,17 +513,6 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
-## Roadmap
-
-- [x] SQLite data provider - **Completed**
-- [ ] CSV data provider implementation
-- [ ] JSON data provider
-- [ ] Support for multiple data providers in single Generator instance
-- [ ] Performance optimizations for large datasets
-- [ ] Fluent assertion extensions for testing
-- [ ] Table join support
-- [ ] Data transformation pipelines
-
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
@@ -534,7 +523,3 @@ For issues, questions, or suggestions:
 - Open an issue on [GitHub](https://github.com/ctacke/DataMaker/issues)
 - Check existing issues for solutions
 - Review the examples in the test project
-
-## Acknowledgments
-
-Built with ❤️ for the .NET testing community.

@@ -14,12 +14,12 @@ public class SqliteTests
 
         generator.AddDataMap<Customer>("Customers")
             .WithSequence(c => c.Id) // this just generates sequantial numeric IDs
-            .WithColumn(c => c.FirstName, "FirstName")
+            .WithPersonData(c => c.FirstName, (data) => data.FirstName)
             .WithColumn(c => c.LastName, "LastName")
             .WithColumn(c => c.Company, "Company")
             .WithColumn(c => c.Email, "Email")
             .WithColumn(c => c.Phone, "Phone")
-            .WithColumn(c => c.Address, "Address");
+            .WithAddressData(c => c.Address, (data) => $"{data.StreetAddress}, {data.City}, {data.State}");
 
         var customers = generator.Generate<Customer>(10).ToList();
 
@@ -207,6 +207,28 @@ public class SqliteTests
         foreach (var customer in customers)
         {
             Debug.WriteLine($"| {customer.Id,-5} | {customer.FirstName,-15} | {customer.LastName,-15} | {customer.Company,-30} |");
+        }
+    }
+
+    [Fact]
+    public void WithColumnTransform_ShouldTransformValue()
+    {
+        var generator = new Generator();
+        generator.AddProvider(new SqliteDataProvider(DatabasePath));
+
+        generator.AddDataMap<Product>("Products")
+            .WithColumn(p => p.Name)
+            .WithColumnTransform(p => p.Description, "Name", (index, value) => $"Transformed: {value.ToString().Substring(0, 5)}");
+
+        var products = generator.Generate<Product>(5).ToList();
+
+        Assert.Equal(5, products.Count);
+        Assert.All(products, p => Assert.StartsWith("Transformed:", p.Description));
+
+        Debug.WriteLine("\nWithColumnTransform Test:");
+        foreach (var product in products)
+        {
+            Debug.WriteLine($"Name: {product.Name}, Description: {product.Description}");
         }
     }
 }
