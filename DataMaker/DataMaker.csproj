@@ -7,7 +7,7 @@
 
     <!-- NuGet Package Metadata -->
     <PackageId>DataMaker</PackageId>
-    <Version>1.3.1</Version>
+    <Version>1.3.2</Version>
     <Authors>Chris Tacke</Authors>
     <Company>Your Company</Company>
     <Product>DataMaker</Product>

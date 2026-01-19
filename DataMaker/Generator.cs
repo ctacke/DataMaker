@@ -58,7 +58,7 @@ public class Generator
     /// <param name="allowRepeats">If true, the generator may select the same row multiple times. If false, then it may return fewer than the requested number of rows.</param>
     /// <returns>A collection of generated entities.</returns>
     /// <exception cref="InvalidOperationException">Thrown when no data provider has been added or no data map exists for the type.</exception>
-    public IEnumerable<T> Generate<T>(int count, SelectionStrategy strategy = SelectionStrategy.Sequential, bool allowRepeats = true) where T : new()
+    public IEnumerable<T> Generate<T>(int count, SelectionStrategy strategy = SelectionStrategy.Sequential, bool allowRepeats = false) where T : new()
     {
         if (_dataProvider == null)
         {
@@ -153,7 +153,7 @@ public class Generator
 
             if (!allowRepeats && list.Count >= rowCount)
             {
-                break; 
+                break;
             }
         }
 
