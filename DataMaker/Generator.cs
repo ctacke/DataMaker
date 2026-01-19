@@ -55,9 +55,10 @@ public class Generator
     /// <typeparam name="T">The type of entity to generate.</typeparam>
     /// <param name="count">The number of entities to generate.</param>
     /// <param name="strategy">The selection strategy (Sequential or Random). Defaults to Sequential.</param>
+    /// <param name="allowRepeats">If true, the generator may select the same row multiple times. If false, then it may return fewer than the requested number of rows.</param>
     /// <returns>A collection of generated entities.</returns>
     /// <exception cref="InvalidOperationException">Thrown when no data provider has been added or no data map exists for the type.</exception>
-    public IEnumerable<T> Generate<T>(int count, SelectionStrategy strategy = SelectionStrategy.Sequential) where T : new()
+    public IEnumerable<T> Generate<T>(int count, SelectionStrategy strategy = SelectionStrategy.Sequential, bool allowRepeats = true) where T : new()
     {
         if (_dataProvider == null)
         {
@@ -81,6 +82,7 @@ public class Generator
         }
 
         var list = new List<T>();
+        var selectedRows = new List<int>();
 
         for (var i = 0; i < count; i++)
         {
@@ -88,15 +90,27 @@ public class Generator
             int rowIndex;
             if (strategy == SelectionStrategy.Sequential)
             {
-                rowIndex = i % rowCount; // Wrap around if count > rowCount
+                if (allowRepeats)
+                {
+                    rowIndex = i % rowCount; // Wrap around if count > rowCount
+                }
+                else
+                {
+                    rowIndex = i;
+                }
             }
             else // Random
             {
                 rowIndex = _random.Next(0, rowCount);
+                while (!allowRepeats && selectedRows.Contains(rowIndex))
+                {
+                    rowIndex = _random.Next(0, rowCount);
+                }
             }
 
             // Get the primary row
             var primaryRow = primaryTable[rowIndex];
+            selectedRows.Add(rowIndex);
 
             // Create the entity and populate its properties
             var item = new T();
@@ -136,6 +150,11 @@ public class Generator
                 }
             }
             list.Add(item);
+
+            if (!allowRepeats && list.Count >= rowCount)
+            {
+                break; 
+            }
         }
 
         return list;

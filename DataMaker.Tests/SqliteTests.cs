@@ -90,6 +90,75 @@ public class SqliteTests
     }
 
     [Fact]
+    public void SqliteProvider_RandomSelection_WithNoRepeats()
+    {
+        var generator = new Generator();
+        generator.AddProvider(new SqliteDataProvider(DatabasePath));
+
+        generator.AddDataMap<Customer>("Customers")
+            .WithSequence(c => c.Id, startValue: 1000)
+            .WithColumn(c => c.FirstName, "FirstName")
+            .WithColumn(c => c.LastName, "LastName")
+            .WithColumn(c => c.Company, "Company")
+            .WithColumn(c => c.Email, "Email");
+
+        var customers = generator.Generate<Customer>(5, SelectionStrategy.Random, allowRepeats: false).ToList();
+
+        Assert.Equal(5, customers.Count);
+        // Verify sequential IDs despite random data selection
+        for (int i = 0; i < customers.Count; i++)
+        {
+            Assert.Equal(1000 + i, customers[i].Id);
+        }
+
+        // Verify that unique customers were selected
+        var distinctCustomers = customers.DistinctBy(c => c.Email);
+        Assert.Equal(5, distinctCustomers.Count());
+
+        Debug.WriteLine("\nRandom Selection Test:");
+        Debug.WriteLine($"| {"ID",-5} | {"FirstName",-15} | {"LastName",-15} |");
+        foreach (var customer in customers.Take(5))
+        {
+            Debug.WriteLine($"| {customer.Id,-5} | {customer.FirstName,-15} | {customer.LastName,-15} |");
+        }
+    }
+
+    [Fact]
+    public void SqliteProvider_SequentialSelection_WithNoRepeats()
+    {
+        var generator = new Generator();
+        generator.AddProvider(new SqliteDataProvider(DatabasePath));
+
+        generator.AddDataMap<Customer>("Customers")
+            .WithSequence(c => c.Id, startValue: 1000)
+            .WithColumn(c => c.FirstName, "FirstName")
+            .WithColumn(c => c.LastName, "LastName")
+            .WithColumn(c => c.Company, "Company")
+            .WithColumn(c => c.Email, "Email");
+
+        var customers = generator.Generate<Customer>(15, SelectionStrategy.Sequential, allowRepeats: false).ToList();
+
+        // Even though 15 requested, there are only 13 Customers in the Sqlite database
+        Assert.Equal(13, customers.Count);
+        // Verify sequential IDs despite random data selection
+        for (int i = 0; i < customers.Count; i++)
+        {
+            Assert.Equal(1000 + i, customers[i].Id);
+        }
+
+        // Verify that unique customers were selected
+        var distinctCustomers = customers.DistinctBy(c => c.Email);
+        Assert.Equal(13, distinctCustomers.Count());
+
+        Debug.WriteLine("\nRandom Selection Test:");
+        Debug.WriteLine($"| {"ID",-5} | {"FirstName",-15} | {"LastName",-15} |");
+        foreach (var customer in customers.Take(5))
+        {
+            Debug.WriteLine($"| {customer.Id,-5} | {customer.FirstName,-15} | {customer.LastName,-15} |");
+        }
+    }
+
+    [Fact]
     public void SqliteProvider_CustomFormatting_ShouldWork()
     {
         var generator = new Generator();
