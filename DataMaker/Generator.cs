@@ -56,9 +56,19 @@ public class Generator
     /// <param name="count">The number of entities to generate.</param>
     /// <param name="strategy">The selection strategy (Sequential or Random). Defaults to Sequential.</param>
     /// <param name="allowRepeats">If true, the generator may select the same row multiple times. If false, then it may return fewer than the requested number of rows.</param>
-    /// <returns>A collection of generated entities.</returns>
+    /// <returns>A GeneratedQuery that can be enumerated or filtered with FirstAdd().</returns>
     /// <exception cref="InvalidOperationException">Thrown when no data provider has been added or no data map exists for the type.</exception>
-    public IEnumerable<T> Generate<T>(int count, SelectionStrategy strategy = SelectionStrategy.Sequential, bool allowRepeats = false) where T : new()
+    public GeneratedQuery<T> Generate<T>(int count, SelectionStrategy strategy = SelectionStrategy.Sequential, bool allowRepeats = false) where T : new()
+    {
+        return new GeneratedQuery<T>(this, count, strategy, allowRepeats);
+    }
+
+    /// <summary>
+    /// Internal method that performs the actual generation with predicate support.
+    /// When predicates are provided via FirstAdd(), matching items are yielded first,
+    /// then remaining slots are filled with other items.
+    /// </summary>
+    internal IEnumerable<T> GenerateInternal<T>(int count, SelectionStrategy strategy, bool allowRepeats, List<Func<T, bool>> predicates) where T : new()
     {
         if (_dataProvider == null)
         {
@@ -81,83 +91,131 @@ public class Generator
             throw new InvalidOperationException($"Primary table '{map.PrimaryTableName}' has no rows.");
         }
 
-        var list = new List<T>();
-        var selectedRows = new List<int>();
+        var yieldedCount = 0;
+        var selectedRows = new HashSet<int>();
+        var generationIndex = 0;
 
-        for (var i = 0; i < count; i++)
+        // Phase 1: If predicates exist, scan all rows to find and yield matching items first
+        if (predicates.Count > 0)
         {
-            // Determine which row to use from the primary table based on strategy
+            for (int rowIndex = 0; rowIndex < rowCount && yieldedCount < count; rowIndex++)
+            {
+                var primaryRow = primaryTable[rowIndex];
+                var item = CreateItem<T>(map, primaryRow, _dataProvider, generationIndex);
+
+                // Check if this item matches any predicate
+                if (predicates.Any(p => p(item)))
+                {
+                    selectedRows.Add(rowIndex);
+                    yieldedCount++;
+                    generationIndex++;
+                    yield return item;
+                }
+            }
+        }
+
+        // Phase 2: Fill remaining slots with other items based on selection strategy
+        var sequentialIndex = 0;
+        var maxAttempts = allowRepeats ? count * 100 : rowCount;
+        var attempts = 0;
+
+        while (yieldedCount < count && attempts < maxAttempts)
+        {
             int rowIndex;
             if (strategy == SelectionStrategy.Sequential)
             {
                 if (allowRepeats)
                 {
-                    rowIndex = i % rowCount; // Wrap around if count > rowCount
+                    rowIndex = sequentialIndex % rowCount;
                 }
                 else
                 {
-                    rowIndex = i;
+                    rowIndex = sequentialIndex;
+                    if (rowIndex >= rowCount)
+                    {
+                        break;
+                    }
                 }
+                sequentialIndex++;
             }
             else // Random
             {
+                if (!allowRepeats && selectedRows.Count >= rowCount)
+                {
+                    break;
+                }
+
                 rowIndex = _random.Next(0, rowCount);
-                while (!allowRepeats && selectedRows.Contains(rowIndex))
+                var safetyCounter = 0;
+                while (!allowRepeats && selectedRows.Contains(rowIndex) && safetyCounter < rowCount * 2)
                 {
                     rowIndex = _random.Next(0, rowCount);
+                    safetyCounter++;
+                }
+
+                if (!allowRepeats && selectedRows.Contains(rowIndex))
+                {
+                    break; // Couldn't find an unused row
                 }
             }
 
-            // Get the primary row
+            // Skip rows already selected in Phase 1
+            if (!allowRepeats && selectedRows.Contains(rowIndex))
+            {
+                attempts++;
+                continue;
+            }
+
             var primaryRow = primaryTable[rowIndex];
             selectedRows.Add(rowIndex);
 
-            // Create the entity and populate its properties
-            var item = new T();
-            foreach (var mapping in map.Mappings)
-            {
-                var property = typeof(T).GetProperty(mapping.Key);
-                if (property != null)
-                {
-                    // Use the mapping strategy to get the value, passing the generation index
-                    var value = mapping.Value.GetValue(primaryRow, _dataProvider, i);
+            var item = CreateItem<T>(map, primaryRow, _dataProvider, generationIndex);
+            yieldedCount++;
+            generationIndex++;
+            yield return item;
 
-                    // Set the property value with type conversion
-                    if (value != null && value != DBNull.Value)
+            attempts++;
+        }
+    }
+
+    /// <summary>
+    /// Creates and populates an entity from a data row.
+    /// </summary>
+    private T CreateItem<T>(DataMap<T> map, IDataRow primaryRow, IDataProvider provider, int index) where T : new()
+    {
+        var item = new T();
+        foreach (var mapping in map.Mappings)
+        {
+            var property = typeof(T).GetProperty(mapping.Key);
+            if (property != null)
+            {
+                var value = mapping.Value.GetValue(primaryRow, provider, index);
+
+                if (value != null && value != DBNull.Value)
+                {
+                    if (property.PropertyType != value.GetType())
                     {
-                        if (property.PropertyType != value.GetType())
+                        try
                         {
-                            try
-                            {
-                                property.SetValue(item, Convert.ChangeType(value, property.PropertyType));
-                            }
-                            catch (InvalidCastException)
-                            {
-                                // If conversion fails, try setting directly (might be nullable)
-                                property.SetValue(item, value);
-                            }
+                            property.SetValue(item, Convert.ChangeType(value, property.PropertyType));
                         }
-                        else
+                        catch (InvalidCastException)
                         {
                             property.SetValue(item, value);
                         }
                     }
                     else
                     {
-                        // Set to null for nullable types or default for value types
-                        property.SetValue(item, null);
+                        property.SetValue(item, value);
                     }
                 }
-            }
-            list.Add(item);
-
-            if (!allowRepeats && list.Count >= rowCount)
-            {
-                break;
+                else
+                {
+                    property.SetValue(item, null);
+                }
             }
         }
-
-        return list;
+        return item;
     }
 
     /// <summary>

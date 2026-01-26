@@ -16,6 +16,7 @@ DataMaker simplifies test data generation by mapping your existing database tabl
 - **Strongly-typed mappings** using lambda expressions
 - **Foreign key lookups** - automatically resolve relationships between tables
 - **Multiple selection strategies** - sequential or random data selection
+- **Fluent query API** - use `FirstAdd()` to ensure specific items are included in results
 - **Provider pattern** - easily extend to support different data sources (SQL Server, CSV, etc.)
 - **Fluent API** - clean, readable configuration
 - **Type-safe** - compile-time validation of your mappings
@@ -120,6 +121,32 @@ var sequential = generator.Generate<User>(10, SelectionStrategy.Sequential);
 // Random - randomly selected rows
 var random = generator.Generate<User>(10, SelectionStrategy.Random);
 ```
+
+### 4. Fluent Query with FirstAdd
+
+The `Generate<T>()` method returns a `GeneratedQuery<T>` that supports fluent filtering with `FirstAdd()`. This ensures specific items matching a predicate are included first, then fills the remaining slots with other items.
+
+```csharp
+// Get 10 customers, ensuring the one with ID=5 is included first
+var customers = generator
+    .Generate<Customer>(10)
+    .FirstAdd(c => c.Id == 5)
+    .ToList();
+
+// Chain multiple FirstAdd calls - items matching ANY predicate are prioritized
+var customers = generator
+    .Generate<Customer>(10)
+    .FirstAdd(c => c.Id == specificGuid1)
+    .FirstAdd(c => c.Id == specificGuid2)
+    .ToList();
+// Result: Items with specificGuid1 and specificGuid2 first, then 8 more random items
+```
+
+**Key behaviors:**
+- Items matching any `FirstAdd()` predicate are yielded first
+- Remaining slots are filled with other items based on the selection strategy
+- Multiple `FirstAdd()` calls can be chained (items matching ANY predicate are prioritized)
+- Uses deferred execution - generation happens when enumerated (like LINQ)
 
 ## Mapping Methods
 
@@ -395,7 +422,14 @@ var invoices = generator.Generate<Invoice>(50);
 |--------|-------------|
 | `AddProvider(IDataProvider)` | Adds a data provider for retrieving data |
 | `AddDataMap<T>(string tableName)` | Creates a mapping configuration for type T with specified primary table |
-| `Generate<T>(int count, SelectionStrategy)` | Generates specified number of entities using the configured mappings |
+| `Generate<T>(int count, SelectionStrategy, allowRepeats)` | Returns a `GeneratedQuery<T>` for generating entities with optional filtering |
+
+### GeneratedQuery<T> Class
+
+| Method | Description |
+|--------|-------------|
+| `FirstAdd(Func<T, bool> predicate)` | Ensures items matching the predicate are included first, then fills remaining slots with other items |
+| `ToList()`, `ToArray()`, etc. | Standard LINQ methods trigger deferred execution and return the generated items |
 
 ### DataMap<T> Class
 

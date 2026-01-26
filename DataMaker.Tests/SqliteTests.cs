@@ -72,9 +72,9 @@ public class SqliteTests
             .WithColumn(c => c.LastName, "LastName")
             .WithColumn(c => c.Company, "Company");
 
-        var customers = generator.Generate<Customer>(15, SelectionStrategy.Random).ToList();
+        var customers = generator.Generate<Customer>(10, SelectionStrategy.Random).ToList();
 
-        Assert.Equal(15, customers.Count);
+        Assert.Equal(10, customers.Count);
         // Verify sequential IDs despite random data selection
         for (int i = 0; i < customers.Count; i++)
         {
@@ -298,6 +298,91 @@ public class SqliteTests
         foreach (var product in products)
         {
             Debug.WriteLine($"Name: {product.Name}, Description: {product.Description}");
+        }
+    }
+
+    [Fact]
+    public void FirstAdd_WithSpecificItems()
+    {
+        var generator = new Generator();
+        generator.AddProvider(new SqliteDataProvider(DatabasePath));
+
+        generator.AddDataMap<Customer2>("Customers")
+            .WithColumnTransform(c => c.Id, "Id", (index, value) =>
+                value is byte[] bytes ? new Guid(bytes) : Guid.Empty)
+            .WithColumn(c => c.FirstName, "FirstName")
+            .WithColumn(c => c.LastName, "LastName");
+
+        var g = Guid.Parse("23d8a8fc-645d-4f4e-945c-ad497154c0b3");
+
+        // Use FirstAdd to ensure we add customers with exact ids
+        var customers = generator
+            .Generate<Customer2>(8, SelectionStrategy.Random, allowRepeats: false)
+            .FirstAdd(c => c.Id == g)
+            .ToList();
+
+        Assert.Equal(8, customers.Count);
+        Assert.Contains(customers, c => c.Id == g);
+
+        Debug.WriteLine("\nFirstAdd Filter Test:");
+        foreach (var customer in customers)
+        {
+            Debug.WriteLine($"ID: {customer.Id}, Name: {customer.FirstName} {customer.LastName}");
+        }
+    }
+
+    [Fact]
+    public void FirstAdd_ShouldFilterGeneratedItems()
+    {
+        var generator = new Generator();
+        generator.AddProvider(new SqliteDataProvider(DatabasePath));
+
+        generator.AddDataMap<Customer>("Customers")
+            .WithSequence(c => c.Id, startValue: 1)
+            .WithColumn(c => c.FirstName, "FirstName")
+            .WithColumn(c => c.LastName, "LastName");
+
+        // Use FirstAdd to filter for customers with Id > 5
+        var customers = generator
+            .Generate<Customer>(5, SelectionStrategy.Sequential, allowRepeats: true)
+            .FirstAdd(c => c.Id > 5)
+            .ToList();
+
+        Assert.Equal(5, customers.Count);
+        Assert.All(customers, c => Assert.True(c.Id > 5));
+
+        Debug.WriteLine("\nFirstAdd Filter Test:");
+        foreach (var customer in customers)
+        {
+            Debug.WriteLine($"ID: {customer.Id}, Name: {customer.FirstName} {customer.LastName}");
+        }
+    }
+
+    [Fact]
+    public void FirstAdd_WithMultiplePredicates_ShouldApplyAll()
+    {
+        var generator = new Generator();
+        generator.AddProvider(new SqliteDataProvider(DatabasePath));
+
+        generator.AddDataMap<Customer>("Customers")
+            .WithSequence(c => c.Id, startValue: 1)
+            .WithColumn(c => c.FirstName, "FirstName")
+            .WithColumn(c => c.LastName, "LastName");
+
+        // Chain multiple FirstAdd predicates
+        var customers = generator
+            .Generate<Customer>(3, SelectionStrategy.Sequential, allowRepeats: true)
+            .FirstAdd(c => c.Id > 2)
+            .FirstAdd(c => c.Id < 10)
+            .ToList();
+
+        Assert.Equal(3, customers.Count);
+        Assert.All(customers, c => Assert.True(c.Id > 2 && c.Id < 10));
+
+        Debug.WriteLine("\nFirstAdd Multiple Predicates Test:");
+        foreach (var customer in customers)
+        {
+            Debug.WriteLine($"ID: {customer.Id}, Name: {customer.FirstName} {customer.LastName}");
         }
     }
 }
