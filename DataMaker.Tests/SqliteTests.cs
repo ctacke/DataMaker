@@ -338,7 +338,7 @@ public class SqliteTests
         generator.AddProvider(new SqliteDataProvider(DatabasePath));
 
         generator.AddDataMap<Customer>("Customers")
-            .WithSequence(c => c.Id, startValue: 1)
+            .WithSequence(c => c.Id, startValue: 10)
             .WithColumn(c => c.FirstName, "FirstName")
             .WithColumn(c => c.LastName, "LastName");
 
@@ -365,7 +365,7 @@ public class SqliteTests
         generator.AddProvider(new SqliteDataProvider(DatabasePath));
 
         generator.AddDataMap<Customer>("Customers")
-            .WithSequence(c => c.Id, startValue: 1)
+            .WithSequence(c => c.Id, startValue: 6)
             .WithColumn(c => c.FirstName, "FirstName")
             .WithColumn(c => c.LastName, "LastName");
 
@@ -383,6 +383,58 @@ public class SqliteTests
         foreach (var customer in customers)
         {
             Debug.WriteLine($"ID: {customer.Id}, Name: {customer.FirstName} {customer.LastName}");
+        }
+    }
+
+    [Fact]
+    public void DeterministicIds_ShouldProduceSameSequenceWithSameSeed()
+    {
+        const int seed = 12345;
+
+        // First generation
+        var generator1 = new Generator();
+        generator1.AddProvider(new SqliteDataProvider(DatabasePath));
+        generator1.AddDataMap<CustomerWithDeterministicIds>("Customers")
+            .WithDeterministicLong(c => c.Id, seed)
+            .WithDeterministicGuid(c => c.ExternalId, seed)
+            .WithDeterministicString(c => c.Code, seed, length: 8, prefix: "CUST-")
+            .WithColumn(c => c.FirstName, "FirstName")
+            .WithColumn(c => c.LastName, "LastName");
+
+        var customers1 = generator1.Generate<CustomerWithDeterministicIds>(5).ToList();
+
+        // Second generation with same seed - should produce identical IDs
+        var generator2 = new Generator();
+        generator2.AddProvider(new SqliteDataProvider(DatabasePath));
+        generator2.AddDataMap<CustomerWithDeterministicIds>("Customers")
+            .WithDeterministicLong(c => c.Id, seed)
+            .WithDeterministicGuid(c => c.ExternalId, seed)
+            .WithDeterministicString(c => c.Code, seed, length: 8, prefix: "CUST-")
+            .WithColumn(c => c.FirstName, "FirstName")
+            .WithColumn(c => c.LastName, "LastName");
+
+        var customers2 = generator2.Generate<CustomerWithDeterministicIds>(5).ToList();
+
+        // Verify same seed produces same IDs
+        Assert.Equal(5, customers1.Count);
+        Assert.Equal(5, customers2.Count);
+
+        for (int i = 0; i < 5; i++)
+        {
+            Assert.Equal(customers1[i].Id, customers2[i].Id);
+            Assert.Equal(customers1[i].ExternalId, customers2[i].ExternalId);
+            Assert.Equal(customers1[i].Code, customers2[i].Code);
+        }
+
+        // Verify IDs look valid
+        Assert.All(customers1, c => Assert.True(c.Id > 0, "Long ID should be positive"));
+        Assert.All(customers1, c => Assert.NotEqual(Guid.Empty, c.ExternalId));
+        Assert.All(customers1, c => Assert.StartsWith("CUST-", c.Code));
+
+        Debug.WriteLine("\nDeterministic IDs Test:");
+        foreach (var customer in customers1)
+        {
+            Debug.WriteLine($"ID: {customer.Id}, ExternalId: {customer.ExternalId}, Code: {customer.Code}, Name: {customer.FirstName} {customer.LastName}");
         }
     }
 }

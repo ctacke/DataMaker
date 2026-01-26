@@ -17,6 +17,7 @@ DataMaker simplifies test data generation by mapping your existing database tabl
 - **Foreign key lookups** - automatically resolve relationships between tables
 - **Multiple selection strategies** - sequential or random data selection
 - **Fluent query API** - use `FirstAdd()` to ensure specific items are included in results
+- **Deterministic ID generation** - generate reproducible Snowflake IDs, GUIDs, and more
 - **Provider pattern** - easily extend to support different data sources (SQL Server, CSV, etc.)
 - **Fluent API** - clean, readable configuration
 - **Type-safe** - compile-time validation of your mappings
@@ -414,6 +415,117 @@ generator.AddDataMap<Invoice>("Invoices")
 var invoices = generator.Generate<Invoice>(50);
 ```
 
+## Deterministic ID Generation
+
+The `IdGenerator` class generates deterministic IDs for testing purposes. When initialized with the same seed, it produces the same sequence of IDs every time - perfect for reproducible tests.
+
+### Basic Usage
+
+```csharp
+// Create a generator with a seed for deterministic results
+var idGen = new IdGenerator(seed: 12345);
+
+// Generate Snowflake-like long IDs (64-bit)
+var snowflakeId1 = idGen.NextLong();  // e.g., 7129382947102834688
+var snowflakeId2 = idGen.NextLong();  // Different, but deterministic
+
+// Generate deterministic GUIDs (RFC 4122 compliant)
+var guid1 = idGen.NextGuid();  // e.g., a1b2c3d4-e5f6-7890-abcd-ef1234567890
+
+// Generate deterministic int IDs
+var intId = idGen.NextInt();  // Positive integers
+
+// Generate string IDs with optional prefix
+var stringId = idGen.NextString(length: 10, prefix: "USR-");  // e.g., "USR-A7B3K9M2X1"
+```
+
+### Generating Batches
+
+```csharp
+var idGen = new IdGenerator(seed: 42);
+
+// Generate multiple IDs at once
+var longIds = idGen.TakeLong(100).ToList();
+var guids = idGen.TakeGuid(50).ToList();
+var intIds = idGen.TakeInt(25).ToList();
+var stringIds = idGen.TakeString(10, length: 8, prefix: "ORD-").ToList();
+```
+
+### Reproducible Test Data
+
+```csharp
+[Fact]
+public void OrderProcessing_ShouldCalculateTotal()
+{
+    // Same seed = same IDs every test run
+    var idGen = new IdGenerator(seed: 99999);
+
+    var order = new Order
+    {
+        Id = idGen.NextLong(),           // Always the same ID
+        CustomerId = idGen.NextGuid(),   // Always the same GUID
+        OrderNumber = idGen.NextString(prefix: "ORD-")
+    };
+
+    // Test logic...
+}
+```
+
+### Resetting the Generator
+
+```csharp
+var idGen = new IdGenerator(seed: 12345);
+var id1 = idGen.NextLong();
+var id2 = idGen.NextLong();
+
+// Reset to regenerate the same sequence
+idGen.Reset(seed: 12345);
+var sameAsId1 = idGen.NextLong();  // Equal to id1
+var sameAsId2 = idGen.NextLong();  // Equal to id2
+```
+
+### Fluent Integration with DataMap
+
+Use deterministic IDs directly in your data mappings with the `WithDeterministic*` methods:
+
+```csharp
+generator.AddDataMap<Customer>("Customers")
+    .WithDeterministicLong(c => c.Id, seed: 12345)           // Snowflake-like long IDs
+    .WithDeterministicGuid(c => c.ExternalId, seed: 67890)   // Deterministic GUIDs
+    .WithDeterministicString(c => c.Code, seed: 11111, length: 10, prefix: "CUST-")
+    .WithColumn(c => c.Name, "Name");
+
+// Every test run produces the same IDs
+var customers = generator.Generate<Customer>(100).ToList();
+```
+
+Available fluent methods:
+
+```csharp
+// Long IDs (Snowflake-like)
+.WithDeterministicLong(c => c.Id, seed: 12345)
+
+// Int IDs
+.WithDeterministicInt(c => c.LegacyId, seed: 12345)
+
+// GUIDs
+.WithDeterministicGuid(c => c.ExternalId, seed: 12345)
+
+// String IDs with optional length and prefix
+.WithDeterministicString(c => c.Code, seed: 12345)
+.WithDeterministicString(c => c.Code, seed: 12345, length: 12)
+.WithDeterministicString(c => c.Code, seed: 12345, length: 10, prefix: "ORD-")
+```
+
+### Supported ID Types
+
+| Method | Type | Description |
+|--------|------|-------------|
+| `NextLong()` | `long` | Snowflake-like 64-bit IDs with timestamp, worker, and sequence components |
+| `NextInt()` | `int` | Positive 32-bit integers |
+| `NextGuid()` | `Guid` | RFC 4122 compliant version 4 GUIDs |
+| `NextString(length, prefix)` | `string` | Alphanumeric strings with optional prefix |
+
 ## API Reference
 
 ### Generator Class
@@ -431,6 +543,21 @@ var invoices = generator.Generate<Invoice>(50);
 | `FirstAdd(Func<T, bool> predicate)` | Ensures items matching the predicate are included first, then fills remaining slots with other items |
 | `ToList()`, `ToArray()`, etc. | Standard LINQ methods trigger deferred execution and return the generated items |
 
+### IdGenerator Class
+
+| Method | Description |
+|--------|-------------|
+| `IdGenerator(int seed)` | Creates a generator with the specified seed for deterministic ID generation |
+| `NextLong()` | Generates the next Snowflake-like 64-bit ID |
+| `NextInt()` | Generates the next positive 32-bit integer ID |
+| `NextGuid()` | Generates the next deterministic GUID |
+| `NextString(length, prefix)` | Generates the next alphanumeric string ID |
+| `TakeLong(count)` | Generates a sequence of long IDs |
+| `TakeInt(count)` | Generates a sequence of int IDs |
+| `TakeGuid(count)` | Generates a sequence of GUIDs |
+| `TakeString(count, length, prefix)` | Generates a sequence of string IDs |
+| `Reset(seed)` | Resets the generator to regenerate the same sequence |
+
 ### DataMap<T> Class
 
 | Method | Description |
@@ -442,6 +569,10 @@ var invoices = generator.Generate<Invoice>(50);
 | `WithValue(property, indexFunc)` | Generates values using a function with index access |
 | `WithLookup(property, table, fk, pk, column)` | Maps property using foreign key lookup |
 | `WithTableMap(property, func)` | Maps property using custom function (with optional index parameter) |
+| `WithDeterministicLong(property, seed)` | Maps property to deterministic Snowflake-like long IDs |
+| `WithDeterministicInt(property, seed)` | Maps property to deterministic int IDs |
+| `WithDeterministicGuid(property, seed)` | Maps property to deterministic GUIDs |
+| `WithDeterministicString(property, seed, length, prefix)` | Maps property to deterministic string IDs |
 
 ### SelectionStrategy Enum
 

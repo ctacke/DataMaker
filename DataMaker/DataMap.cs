@@ -391,6 +391,86 @@ namespace DataMaker
             return this;
         }
 
+        /// <summary>
+        /// Maps a property to a deterministic long ID (Snowflake-like).
+        /// Same seed produces the same sequence of IDs across test runs.
+        /// </summary>
+        /// <param name="property">Expression identifying the property to map.</param>
+        /// <param name="seed">Seed value for deterministic generation.</param>
+        /// <returns>The DataMap instance for fluent chaining.</returns>
+        /// <example>
+        /// <code>
+        /// dataMap.WithDeterministicLong(c => c.Id, seed: 12345)
+        /// </code>
+        /// </example>
+        public DataMap<T> WithDeterministicLong(Expression<Func<T, long>> property, int seed)
+        {
+            if (property == null)
+                throw new ArgumentNullException(nameof(property));
+
+            var propertyName = GetPropertyName(property);
+            Mappings[propertyName] = new DeterministicLongMapping(seed);
+            return this;
+        }
+
+        /// <summary>
+        /// Maps a property to a deterministic int ID.
+        /// Same seed produces the same sequence of IDs across test runs.
+        /// </summary>
+        /// <param name="property">Expression identifying the property to map.</param>
+        /// <param name="seed">Seed value for deterministic generation.</param>
+        /// <returns>The DataMap instance for fluent chaining.</returns>
+        public DataMap<T> WithDeterministicInt(Expression<Func<T, int>> property, int seed)
+        {
+            if (property == null)
+                throw new ArgumentNullException(nameof(property));
+
+            var propertyName = GetPropertyName(property);
+            Mappings[propertyName] = new DeterministicIntMapping(seed);
+            return this;
+        }
+
+        /// <summary>
+        /// Maps a property to a deterministic GUID.
+        /// Same seed produces the same sequence of GUIDs across test runs.
+        /// </summary>
+        /// <param name="property">Expression identifying the property to map.</param>
+        /// <param name="seed">Seed value for deterministic generation.</param>
+        /// <returns>The DataMap instance for fluent chaining.</returns>
+        public DataMap<T> WithDeterministicGuid(Expression<Func<T, Guid>> property, int seed)
+        {
+            if (property == null)
+                throw new ArgumentNullException(nameof(property));
+
+            var propertyName = GetPropertyName(property);
+            Mappings[propertyName] = new DeterministicGuidMapping(seed);
+            return this;
+        }
+
+        /// <summary>
+        /// Maps a property to a deterministic string ID.
+        /// Same seed produces the same sequence of strings across test runs.
+        /// </summary>
+        /// <param name="property">Expression identifying the property to map.</param>
+        /// <param name="seed">Seed value for deterministic generation.</param>
+        /// <param name="length">Length of the random portion (default 8).</param>
+        /// <param name="prefix">Optional prefix for the ID.</param>
+        /// <returns>The DataMap instance for fluent chaining.</returns>
+        /// <example>
+        /// <code>
+        /// dataMap.WithDeterministicString(c => c.Code, seed: 12345, length: 10, prefix: "USR-")
+        /// </code>
+        /// </example>
+        public DataMap<T> WithDeterministicString(Expression<Func<T, string>> property, int seed, int length = 8, string? prefix = null)
+        {
+            if (property == null)
+                throw new ArgumentNullException(nameof(property));
+
+            var propertyName = GetPropertyName(property);
+            Mappings[propertyName] = new DeterministicStringMapping(seed, length, prefix);
+            return this;
+        }
+
         private string GetPropertyName<TProp>(Expression<Func<T, TProp>> property)
         {
             if (property.Body is MemberExpression member)
@@ -572,6 +652,82 @@ namespace DataMaker
         {
             var originalValue = primaryRow[_columnName];
             return _transformFunc(index, originalValue);
+        }
+    }
+
+    /// <summary>
+    /// Maps a property to a deterministic long ID using IdGenerator.
+    /// </summary>
+    internal class DeterministicLongMapping : IPropertyMapping
+    {
+        private readonly IdGenerator _idGenerator;
+
+        public DeterministicLongMapping(int seed)
+        {
+            _idGenerator = new IdGenerator(seed);
+        }
+
+        public object GetValue(IDataRow primaryRow, IDataProvider provider, int index)
+        {
+            return _idGenerator.NextLong();
+        }
+    }
+
+    /// <summary>
+    /// Maps a property to a deterministic int ID using IdGenerator.
+    /// </summary>
+    internal class DeterministicIntMapping : IPropertyMapping
+    {
+        private readonly IdGenerator _idGenerator;
+
+        public DeterministicIntMapping(int seed)
+        {
+            _idGenerator = new IdGenerator(seed);
+        }
+
+        public object GetValue(IDataRow primaryRow, IDataProvider provider, int index)
+        {
+            return _idGenerator.NextInt();
+        }
+    }
+
+    /// <summary>
+    /// Maps a property to a deterministic GUID using IdGenerator.
+    /// </summary>
+    internal class DeterministicGuidMapping : IPropertyMapping
+    {
+        private readonly IdGenerator _idGenerator;
+
+        public DeterministicGuidMapping(int seed)
+        {
+            _idGenerator = new IdGenerator(seed);
+        }
+
+        public object GetValue(IDataRow primaryRow, IDataProvider provider, int index)
+        {
+            return _idGenerator.NextGuid();
+        }
+    }
+
+    /// <summary>
+    /// Maps a property to a deterministic string ID using IdGenerator.
+    /// </summary>
+    internal class DeterministicStringMapping : IPropertyMapping
+    {
+        private readonly IdGenerator _idGenerator;
+        private readonly int _length;
+        private readonly string? _prefix;
+
+        public DeterministicStringMapping(int seed, int length, string? prefix)
+        {
+            _idGenerator = new IdGenerator(seed);
+            _length = length;
+            _prefix = prefix;
+        }
+
+        public object GetValue(IDataRow primaryRow, IDataProvider provider, int index)
+        {
+            return _idGenerator.NextString(_length, _prefix);
         }
     }
 }
